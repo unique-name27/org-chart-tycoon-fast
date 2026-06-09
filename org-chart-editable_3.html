@@ -7803,6 +7803,22 @@ function seasonState(t) {
 }
 
 // Step inside a building: every employee of that department is a little person at a desk (1:1).
+// Cached radial-glow sprites: baking one per color and blitting it (drawImage) is far cheaper
+// than calling createRadialGradient + fill for every light source every frame.
+const _glowCache = {};
+function glowSprite(rgb) {
+  if (_glowCache[rgb]) return _glowCache[rgb];
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const g = c.getContext("2d"), rad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rad.addColorStop(0, `rgba(${rgb},1)`); rad.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = rad; g.fillRect(0, 0, 128, 128);
+  _glowCache[rgb] = c; return c;
+}
+function blitGlow(ctx, x, y, rx, ry, rgb, alpha) { // caller sets globalCompositeOperation (usually "lighter")
+  if (alpha <= 0.002) return;
+  const a = ctx.globalAlpha; ctx.globalAlpha = Math.min(1, alpha);
+  ctx.drawImage(glowSprite(rgb), x - rx, y - ry, rx * 2, ry * 2); ctx.globalAlpha = a;
+}
 function BuildingInterior({ building, onClose, onSelect }) {
   const mountRef = useRef(null), tipRef = useRef(null);
   const selRef = useRef(onSelect); selRef.current = onSelect;
@@ -8039,6 +8055,7 @@ function BuildingInterior({ building, onClose, onSelect }) {
     }
     let raf = 0, last = performance.now(), clock = 0, hover = -1;
     function frame(now) {
+      if (document.hidden) { last = now; raf = requestAnimationFrame(frame); return; }
       const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
       const tod = timeOfDay(), sky = skyState(tod), z = cam.zoom, wh = WALLH * z;
       workers.forEach(w => updWorker(w, dt)); updMeeting(dt);
@@ -8050,9 +8067,9 @@ function BuildingInterior({ building, onClose, onSelect }) {
       for (let g = 0.5; g < FH; g += 2) { const a = w2s(-0.5, g), b = w2s(-0.5, g + 0.9); poly([up(a, wh * 0.82), up(b, wh * 0.82), up(b, wh * 0.42), up(a, wh * 0.42)], winCol); ctx.fillStyle = "rgba(18,26,46,0.7)"; const sb = up(a, wh * 0.5); ctx.fillRect(sb[0] + 2 * z, sb[1] - 5 * z, 3 * z, 7 * z); }
       for (let g = 0.5; g < FW; g += 2) { const a = w2s(g, -0.5), b = w2s(g + 0.9, -0.5); poly([up(a, wh * 0.82), up(b, wh * 0.82), up(b, wh * 0.42), up(a, wh * 0.42)], winCol); ctx.fillStyle = "rgba(18,26,46,0.7)"; const sb = up(b, wh * 0.5); ctx.fillRect(sb[0] - 5 * z, sb[1] - 6 * z, 3 * z, 8 * z); }
       drawBoards(); // whiteboards on the back wall
-      if (server) { ctx.save(); ctx.globalCompositeOperation = "lighter"; const c = w2s((server.x0 + server.x1) / 2, server.y0 + 1), rg = ctx.createRadialGradient(c[0], c[1], 2, c[0], c[1], 52 * z); rg.addColorStop(0, "rgba(60,120,210,0.12)"); rg.addColorStop(1, "rgba(60,120,210,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(c[0], c[1], 52 * z, 28 * z, 0, 0, 6.28); ctx.fill(); ctx.restore(); }
+      if (server) { ctx.save(); ctx.globalCompositeOperation = "lighter"; const c = w2s((server.x0 + server.x1) / 2, server.y0 + 1); blitGlow(ctx, c[0], c[1], 52 * z, 28 * z, "60,120,210", 0.12); ctx.restore(); }
       ctx.save(); ctx.globalCompositeOperation = "lighter"; // soft ceiling lighting pools
-      for (let x = 1.2; x < FW; x += 2.6) for (let y = ZONE - 1; y < FH; y += 2.6) { const c = w2s(x, y), R = 34 * z, rg = ctx.createRadialGradient(c[0], c[1], 2, c[0], c[1], R); rg.addColorStop(0, `rgba(255,250,235,${0.05 + 0.05 * sky.day})`); rg.addColorStop(1, "rgba(255,250,235,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.ellipse(c[0], c[1], R, R * 0.5, 0, 0, 6.28); ctx.fill(); }
+      for (let x = 1.2; x < FW; x += 2.6) for (let y = ZONE - 1; y < FH; y += 2.6) { const c = w2s(x, y), R = 34 * z; blitGlow(ctx, c[0], c[1], R, R * 0.5, "255,250,235", 0.05 + 0.05 * sky.day); }
       ctx.restore();
       const items = [];
       furn.forEach(f => items.push({ k: f.gx + f.gy, f }));
@@ -8065,8 +8082,8 @@ function BuildingInterior({ building, onClose, onSelect }) {
       if (sky.night > 0.02) {
         ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = rgbStr(mix([255, 255, 255], [42, 50, 84], sky.night * 0.6)); ctx.fillRect(0, 0, W, H); ctx.restore();
         ctx.save(); ctx.globalCompositeOperation = "lighter";
-        desks.forEach(d => { const m = w2s(d.gx, d.gy - 0.22), cy = m[1] - 12 * z, R = 14 * z, rg = ctx.createRadialGradient(m[0], cy, 1, m[0], cy, R); rg.addColorStop(0, `rgba(120,210,255,${0.5 * sky.night})`); rg.addColorStop(1, "rgba(120,210,255,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(m[0], cy, R, 0, 6.28); ctx.fill(); });
-        if (brk) { const c = w2s(brk.x0 + 1.5, brk.y0 + 0.5), rg = ctx.createRadialGradient(c[0], c[1] - 12 * z, 1, c[0], c[1] - 12 * z, 16 * z); rg.addColorStop(0, `rgba(255,180,90,${0.45 * sky.night})`); rg.addColorStop(1, "rgba(255,180,90,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(c[0], c[1] - 12 * z, 16 * z, 0, 6.28); ctx.fill(); }
+        desks.forEach(d => { const m = w2s(d.gx, d.gy - 0.22), cy = m[1] - 12 * z, R = 14 * z; blitGlow(ctx, m[0], cy, R, R, "120,210,255", 0.5 * sky.night); });
+        if (brk) { const c = w2s(brk.x0 + 1.5, brk.y0 + 0.5); blitGlow(ctx, c[0], c[1] - 12 * z, 16 * z, 16 * z, "255,180,90", 0.45 * sky.night); }
         ctx.restore();
       }
       raf = requestAnimationFrame(frame);
@@ -8116,6 +8133,8 @@ function CityOrgView() {
   const treeRef = useRef(tree); treeRef.current = tree;
   const [interior, setInterior] = useState(null);
   const setInteriorRef = useRef(setInterior); setInteriorRef.current = setInterior;
+  const pausedRef = useRef(false); // true while a building interior overlay is open
+  useEffect(() => { pausedRef.current = !!interior; }, [interior]);
 
   // Group the active org into BU districts -> dept buildings, then lay them out on a tile grid.
   const layout = useMemo(() => {
@@ -8421,6 +8440,7 @@ function CityOrgView() {
     }
 
     function frame(now) {
+      if (pausedRef.current || document.hidden) { last = now; raf = requestAnimationFrame(frame); return; } // skip all work while an interior is open or tab is hidden
       const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
       const tod = timeOfDay(), sky = skyState(tod), ang = sky.ang;
       const rain = Math.max(0, Math.min(1, (Math.sin(Date.now() / 1000 * 0.045) - 0.42) / 0.5)); // slow weather cycle
@@ -8471,8 +8491,8 @@ function CityOrgView() {
         if (sky.night > 0.35) { ctx.fillStyle = `rgba(235,240,255,${(sky.night - 0.35) * 1.1})`; for (let i = 0; i < 70; i++) ctx.fillRect((i * 97.13) % W, (i * 53.7) % (H * 0.5), 1.6, 1.6); }
         { const mx2 = (0.5 + 0.46 * Math.cos(ang)) * W, my2 = (0.62 + 0.5 * Math.sin(ang)) * H; if (my2 < H * 0.66) { ctx.save(); ctx.shadowColor = "#cdd6ff"; ctx.shadowBlur = 18; ctx.fillStyle = "#eef2ff"; ctx.beginPath(); ctx.arc(mx2, my2, 12, 0, 6.28); ctx.fill(); ctx.restore(); } }
         ctx.save(); ctx.globalCompositeOperation = "lighter";
-        sorted.forEach(({ b }) => { const cc = w2s(b.gx, b.gy), ht = b.h * cam.zoom, gy2 = cc[1] - ht * 0.5, R = b.foot * TW * 0.55 * cam.zoom + ht * 0.35, rg = ctx.createRadialGradient(cc[0], gy2, 1, cc[0], gy2, R); rg.addColorStop(0, `rgba(255,206,120,${0.45 * sky.night})`); rg.addColorStop(1, "rgba(255,206,120,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(cc[0], gy2, R, 0, 6.28); ctx.fill(); });
-        layout.lamps.forEach(L => { const s = w2s(L.gx, L.gy), cy2 = s[1] - 18 * cam.zoom, R = 40 * cam.zoom, rg = ctx.createRadialGradient(s[0], cy2, 1, s[0], cy2, R); rg.addColorStop(0, `rgba(255,224,150,${0.75 * sky.night})`); rg.addColorStop(1, "rgba(255,224,150,0)"); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(s[0], cy2, R, 0, 6.28); ctx.fill(); });
+        sorted.forEach(({ b }) => { const cc = w2s(b.gx, b.gy), ht = b.h * cam.zoom, gy2 = cc[1] - ht * 0.5, R = b.foot * TW * 0.55 * cam.zoom + ht * 0.35; blitGlow(ctx, cc[0], gy2, R, R, "255,206,120", 0.45 * sky.night); });
+        layout.lamps.forEach(L => { const s = w2s(L.gx, L.gy), cy2 = s[1] - 18 * cam.zoom, R = 40 * cam.zoom; blitGlow(ctx, s[0], cy2, R, R, "255,224,150", 0.75 * sky.night); });
         cars.forEach(c => { const s = w2s(c.gx, c.gy); ctx.fillStyle = `rgba(255,247,200,${0.7 * sky.night})`; ctx.beginPath(); ctx.arc(s[0], s[1] - 2 * cam.zoom, 2.6 * cam.zoom, 0, 6.28); ctx.fill(); });
         if (hasRiver) for (let y = 1; y < layout.extentY; y += 2.4) { const p = w2s(riverX + Math.sin(clock + y) * 0.2, y); ctx.fillStyle = `rgba(255,214,140,${0.22 * sky.night})`; ctx.fillRect(p[0] - 1.2, p[1] - 7, 2.4, 14); } // shimmering reflections
         ctx.restore();
