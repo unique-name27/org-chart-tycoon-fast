@@ -8468,20 +8468,18 @@ function CityOrgView() {
         if (hasRiver) for (let y = 1; y < layout.extentY; y += 2.4) { const p = w2s(riverX + Math.sin(clock + y) * 0.2, y); ctx.fillStyle = `rgba(255,214,140,${0.22 * sky.night})`; ctx.fillRect(p[0] - 1.2, p[1] - 7, 2.4, 14); } // shimmering reflections
         ctx.restore();
       }
-      // ── signage: department names sit on their building's facade; the BU name is painted on the street in front of the block ──
+      // ── signage: every (on-screen) building shows its department on its facade; the BU name sits on the street right at the front base of its block ──
       ctx.textAlign = "center";
-      if (cam.zoom > 0.6) {
-        ctx.font = `${Math.max(8, Math.round(9.5 * Math.min(1.5, cam.zoom)))}px 'DM Sans', sans-serif`;
-        sorted.forEach(({ b, i }) => {
-          if (i === hover) return;
-          const cc = w2s(b.gx, b.gy), ly = cc[1] - Math.max(7, b.h * cam.zoom * 0.5), w = ctx.measureText(b.name).width + 7;
-          ctx.fillStyle = "rgba(15,23,42,0.5)"; ctx.fillRect(cc[0] - w / 2, ly - 6, w, 12);
-          ctx.fillStyle = "#eef4ff"; ctx.fillText(b.name, cc[0], ly + 3);
-        });
-      }
+      ctx.font = `${Math.max(8, Math.round(9.5 * Math.min(1.5, cam.zoom)))}px 'DM Sans', sans-serif`;
+      sorted.forEach(({ b, i }) => {
+        if (i === hover || !inView(b.gx, b.gy, 340 * zc, 90 * zc)) return;
+        const cc = w2s(b.gx, b.gy), ly = cc[1] - Math.max(7, b.h * cam.zoom * 0.5), w = ctx.measureText(b.name).width + 7;
+        ctx.fillStyle = "rgba(15,23,42,0.5)"; ctx.fillRect(cc[0] - w / 2, ly - 6, w, 12);
+        ctx.fillStyle = "#eef4ff"; ctx.fillText(b.name, cc[0], ly + 3);
+      });
       ctx.font = `bold ${Math.max(10, Math.round(12.5 * Math.min(1.3, cam.zoom)))}px 'DM Sans', sans-serif`;
       layout.districtCenters.forEach(d => {
-        const s = w2s(d.gx, d.gy + layout.DSIZE + layout.GAP * 0.5), w = ctx.measureText(d.bu).width + 18; // street in front of the block
+        const s = w2s(d.gx, d.gy + layout.DSIZE + 0.6), w = ctx.measureText(d.bu).width + 18; // right at the front base of the block
         ctx.fillStyle = "rgba(37,99,235,0.94)"; ctx.fillRect(s[0] - w / 2, s[1] - 9, w, 18);
         ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(s[0] - w / 2, s[1] + 9, w, 2);
         ctx.fillStyle = "#fff"; ctx.fillText(d.bu, s[0], s[1] + 4);
