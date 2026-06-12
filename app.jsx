@@ -8152,40 +8152,73 @@ function BuildingFP3D({ building, focusEmp, onClose, onSelect }) {
     const wallMat = T(new THREE.MeshLambertMaterial({ color: 0x2a2f3d })), wallH = 3.2;
     const mkWall = (x, z, w, d) => { const m = new THREE.Mesh(T(new THREE.BoxGeometry(w, wallH, d)), wallMat); m.position.set(x, wallH / 2, z); scene.add(m); };
     mkWall(WX / 2, 0.06, WX, 0.12); mkWall(WX / 2, WZ - 0.06, WX, 0.12); mkWall(0.06, WZ / 2, 0.12, WZ); mkWall(WX - 0.06, WZ / 2, 0.12, WZ);
-    // a few room props
-    const rackMat = T(new THREE.MeshLambertMaterial({ color: 0x20262f, emissive: 0x0e2417, emissiveIntensity: 0.7 })), benchMat = T(new THREE.MeshLambertMaterial({ color: 0xaeb6bf })), tableMat = T(new THREE.MeshLambertMaterial({ color: 0x6e573c })), couchMat = T(new THREE.MeshLambertMaterial({ color: 0x48648f }));
+    // ---- room props (match the 2D floor plan) ----
+    const addBox = (w, h, d, c, x, y, z, em) => { const mat = new THREE.MeshLambertMaterial(em != null ? { color: c, emissive: em, emissiveIntensity: 0.7 } : { color: c }); const m = new THREE.Mesh(T(new THREE.BoxGeometry(w, h, d)), T(mat)); m.position.set(x, y, z); scene.add(m); return m; };
+    const addCyl = (rt, rb, h, c, x, y, z) => { const m = new THREE.Mesh(T(new THREE.CylinderGeometry(rt, rb, h, 12)), T(new THREE.MeshLambertMaterial({ color: c }))); m.position.set(x, y, z); scene.add(m); return m; };
+    const plant = (tx, tz) => { addCyl(0.12, 0.14, 0.5, 0x7a4a30, tx * S, 0.25, tz * S); const c = new THREE.Mesh(T(new THREE.SphereGeometry(0.42, 10, 8)), T(new THREE.MeshLambertMaterial({ color: 0x3f8f48 }))); c.position.set(tx * S, 0.85, tz * S); scene.add(c); };
+    const whiteboard = (tcx, tw) => { const cvs = document.createElement("canvas"); cvs.width = 256; cvs.height = 150; const c = cvs.getContext("2d"); c.fillStyle = "#eef2f5"; c.fillRect(0, 0, 256, 150); c.lineWidth = 3; c.strokeStyle = "#2d6cdf"; c.strokeRect(28, 30, 46, 34); c.strokeRect(150, 30, 46, 34); c.strokeStyle = "#1b2330"; c.beginPath(); c.moveTo(74, 47); c.lineTo(150, 47); c.stroke(); c.strokeStyle = "#cc3b3b"; c.lineWidth = 2; c.beginPath(); for (let i = 0; i <= 30; i++) c.lineTo(170 + i * 2.5, 110 + Math.sin(i * 0.6) * 9); c.stroke(); c.strokeStyle = "#1b2330"; for (let r = 0; r < 3; r++) { c.beginPath(); c.moveTo(28, 92 + r * 14); c.lineTo(96, 92 + r * 14); c.stroke(); } const tex = T(new THREE.CanvasTexture(cvs)); const m = new THREE.Mesh(T(new THREE.PlaneGeometry(tw * S * 0.8, 1.3)), T(new THREE.MeshBasicMaterial({ map: tex }))); m.position.set(tcx * S, 1.7, 0.15); scene.add(m); };
+    // windows (sky strips) high on the north & west walls
+    const winMat = T(new THREE.MeshBasicMaterial({ color: 0x33507f }));
+    const nWin = new THREE.Mesh(T(new THREE.PlaneGeometry(WX * 0.9, 0.5)), winMat); nWin.position.set(WX / 2, 2.7, 0.12); scene.add(nWin);
+    const wWin = new THREE.Mesh(T(new THREE.PlaneGeometry(WZ * 0.9, 0.5)), winMat); wWin.rotation.y = Math.PI / 2; wWin.position.set(0.12, 2.7, WZ / 2); scene.add(wWin);
+    // exec office for the manager
+    if (office) { const ox = offDesk.x * S, oz = offDesk.z * S; addBox(1.8, 1.0, 0.9, 0x6e4f33, ox, 0.5, oz - 0.6); addBox(0.5, 0.4, 0.06, 0x12161c, ox, 1.2, oz - 0.5, 0x1d4060); addBox(0.7, 1.05, 0.7, 0x384563, ox, 0.52, oz + 0.05); addBox(0.5, 2.2, 1.0, 0x6a4a30, (office.x0 + 0.55) * S, 1.1, 0.6 * S); plant(office.x1 - 0.5, 0.6); }
+    // per-room props
+    const rackMat = T(new THREE.MeshLambertMaterial({ color: 0x20262f, emissive: 0x123a22, emissiveIntensity: 0.8 }));
     rooms.forEach(r => {
-      const cx = (r.x0 + r.x1) / 2 * S;
-      if (r.kind === "server") for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(T(new THREE.BoxGeometry(0.5, 2.0, 0.5)), rackMat); m.position.set((r.x0 + 0.6 + i * 0.7) * S, 1.0, 0.7 * S); scene.add(m); }
-      else if (r.kind === "lab") for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(T(new THREE.BoxGeometry(1.4, 0.9, 0.7)), benchMat); m.position.set((r.x0 + 1 + i * 1.6) * S, 0.45, 0.7 * S); scene.add(m); }
-      else if (r.kind === "meet") { const m = new THREE.Mesh(T(new THREE.BoxGeometry(2.0, 0.8, 1.0)), tableMat); m.position.set(cx, 0.5, ZONE / 2 * S); scene.add(m); }
-      else if (r.kind === "lounge") { const m = new THREE.Mesh(T(new THREE.BoxGeometry(1.6, 0.7, 0.8)), couchMat); m.position.set(cx, 0.35, (ZONE - 0.8) * S); scene.add(m); }
+      const cx = (r.x0 + r.x1) / 2;
+      if (r.kind === "server") { for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(T(new THREE.BoxGeometry(0.5, 2.0, 0.5)), rackMat); m.position.set((r.x0 + 0.6 + i * 0.7) * S, 1.0, 0.7 * S); scene.add(m); } }
+      else if (r.kind === "lab") { for (let i = 0; i < 2; i++) { addBox(1.4, 0.9, 0.7, 0xaeb6bf, (r.x0 + 1 + i * 1.6) * S, 0.45, 0.7 * S); addBox(0.4, 0.3, 0.05, 0x12161c, (r.x0 + 1 + i * 1.6) * S, 1.05, 0.55 * S, 0x1f6f4a); } whiteboard(cx, r.x1 - r.x0); }
+      else if (r.kind === "meet") { addBox(2.0, 0.8, 1.0, 0x6e573c, cx * S, 0.5, ZONE / 2 * S); whiteboard(cx, r.x1 - r.x0); }
+      else if (r.kind === "break") { addBox((r.x1 - r.x0 - 0.4) * S, 0.9, 0.5, 0xc4ccd6, cx * S, 0.45, 0.45 * S); addBox(0.7, 1.9, 0.7, 0xcfd6de, (r.x0 + 0.6) * S, 0.95, 0.5 * S); addBox(0.4, 0.5, 0.4, 0x2b2f3a, (r.x0 + 1.5) * S, 1.15, 0.45 * S); addCyl(0.18, 0.2, 1.0, 0xdfe7ef, (r.x0 + 2.6) * S, 0.5, 0.5 * S); addCyl(0.5, 0.5, 0.06, 0xdfe4ea, (r.x0 + 1.2) * S, 0.78, (ZONE - 1.0) * S); }
+      else if (r.kind === "lounge") { addBox(1.6, 0.7, 0.8, 0x48648f, cx * S, 0.35, (ZONE - 0.9) * S); addBox(0.9, 0.45, 0.6, 0x6a4a32, cx * S, 0.22, (ZONE - 1.7) * S); plant(r.x1 - 0.4, ZONE - 0.4); }
+      else if (r.kind === "priv") { addBox(1.0, 0.9, 0.7, 0x7d5b3c, (r.x0 + 0.8) * S, 0.45, 0.9 * S); addBox(1.0, 0.9, 0.7, 0x7d5b3c, (r.x1 - 0.8) * S, 0.45, 0.9 * S); plant(r.x1 - 0.5, ZONE - 0.5); }
     });
+    if (workW >= 2 && nStaff >= 6) addBox(0.5, 1.0, 0.5, 0x3a4150, (workW - 0.6) * S, 0.5, (ZONE + 1.6) * S); // printer
+    plant(0.4, ZONE + 0.4); plant(FW - 0.5, ZONE + 0.4);
 
-    // ----- desks / chairs / monitors / people (instanced) -----
-    const n = Math.max(1, seats.length);
+    // ----- staff desks/chairs/monitors (static) + everyone as bodies/heads (animated), instanced -----
+    const D = staff.length, P = seats.length;
     const deskGeo = T(new THREE.BoxGeometry(1.3, 1.0, 0.7)), deskMat = T(new THREE.MeshLambertMaterial({ color: 0x8a6a44 }));
     const monGeo = T(new THREE.BoxGeometry(0.5, 0.4, 0.06)), monMat = T(new THREE.MeshLambertMaterial({ color: 0x12161c, emissive: 0x1d4060, emissiveIntensity: 0.7 }));
     const chairGeo = T(new THREE.BoxGeometry(0.55, 0.5, 0.55)), chairMat = T(new THREE.MeshLambertMaterial({ color: 0x2f3a52 }));
     const bodyGeo = T(new THREE.CylinderGeometry(0.24, 0.32, 0.95, 8)), bodyMat = T(new THREE.MeshLambertMaterial({ color: 0xffffff }));
     const headGeo = T(new THREE.SphereGeometry(0.2, 12, 10)), headMat = T(new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    const deskInst = new THREE.InstancedMesh(deskGeo, deskMat, n), monInst = new THREE.InstancedMesh(monGeo, monMat, n), chairInst = new THREE.InstancedMesh(chairGeo, chairMat, n), bodyInst = new THREE.InstancedMesh(bodyGeo, bodyMat, n), headInst = new THREE.InstancedMesh(headGeo, headMat, n);
+    const deskInst = new THREE.InstancedMesh(deskGeo, deskMat, Math.max(1, D)), monInst = new THREE.InstancedMesh(monGeo, monMat, Math.max(1, D)), chairInst = new THREE.InstancedMesh(chairGeo, chairMat, Math.max(1, D));
+    const bodyInst = new THREE.InstancedMesh(bodyGeo, bodyMat, Math.max(1, P)), headInst = new THREE.InstancedMesh(headGeo, headMat, Math.max(1, P));
     const dummy = new THREE.Object3D(), col = new THREE.Color();
-    seats.forEach((s, i) => {
-      const x = s.x * S, z = s.z * S;
-      dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
-      dummy.position.set(x, 0.25, z + 0.05); dummy.updateMatrix(); chairInst.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x, 0.5, z - 0.75); dummy.updateMatrix(); deskInst.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x, 1.15, z - 0.66); dummy.updateMatrix(); monInst.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x, 0.78, z); dummy.scale.set(1, 0.72, 1); dummy.updateMatrix(); bodyInst.setMatrixAt(i, dummy.matrix);
-      col.set(FN_COLORS[s.e && s.e.fn] || building.color || "#6b9"); bodyInst.setColorAt(i, col);
-      dummy.scale.set(1, 1, 1); dummy.position.set(x, 1.3, z); dummy.updateMatrix(); headInst.setMatrixAt(i, dummy.matrix);
-      col.set(SKIN[(i * 13) % SKIN.length]); headInst.setColorAt(i, col);
-    });
-    [deskInst, monInst, chairInst, bodyInst, headInst].forEach(m => { m.instanceMatrix.needsUpdate = true; });
+    for (let i = 0; i < D; i++) { const s = seats[i], x = s.x * S, z = s.z * S; dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.position.set(x, 0.25, z + 0.05); dummy.updateMatrix(); chairInst.setMatrixAt(i, dummy.matrix); dummy.position.set(x, 0.5, z - 0.75); dummy.updateMatrix(); deskInst.setMatrixAt(i, dummy.matrix); dummy.position.set(x, 1.15, z - 0.66); dummy.updateMatrix(); monInst.setMatrixAt(i, dummy.matrix); }
+    [deskInst, monInst, chairInst].forEach(m => { m.instanceMatrix.needsUpdate = true; });
+    seats.forEach((s, i) => { col.set(FN_COLORS[s.e && s.e.fn] || building.color || "#6b9"); bodyInst.setColorAt(i, col); col.set(SKIN[(i * 13) % SKIN.length]); headInst.setColorAt(i, col); });
     if (bodyInst.instanceColor) bodyInst.instanceColor.needsUpdate = true;
     if (headInst.instanceColor) headInst.instanceColor.needsUpdate = true;
     scene.add(deskInst, monInst, chairInst, bodyInst, headInst);
+    bodyInst.frustumCulled = false; headInst.frustumCulled = false; // they move every frame; don't cull by a stale bounds
+
+    // ----- people behaviour: most seated, some get up and walk to coffee / labs / a colleague's desk -----
+    const people = seats.map(s => ({ e: s.e, hx: s.x, hz: s.z, x: s.x, z: s.z, tx: s.x, tz: s.z, state: "work", t: 2 + Math.random() * 6, dir: Math.PI, bob: Math.random() * 6.28, seated: true }));
+    const dests = [];
+    const _brk = rooms.find(r => r.kind === "break"); if (_brk) dests.push({ x: _brk.x0 + 1.5, z: ZONE - 1.0 });
+    const _lab = rooms.find(r => r.kind === "lab"); if (_lab) dests.push({ x: _lab.x0 + 1.4, z: ZONE - 1.1 });
+    const _srv = rooms.find(r => r.kind === "server"); if (_srv) dests.push({ x: (_srv.x0 + _srv.x1) / 2, z: ZONE - 0.9 });
+    const _meet = rooms.find(r => r.kind === "meet"); if (_meet) dests.push({ x: (_meet.x0 + _meet.x1) / 2, z: ZONE / 2 });
+    const _lng = rooms.find(r => r.kind === "lounge"); if (_lng) dests.push({ x: (_lng.x0 + _lng.x1) / 2, z: ZONE - 1.0 });
+    function pickGoal(p) {
+      const r = Math.random();
+      if (dests.length && r < 0.42) { const d = dests[Math.floor(Math.random() * dests.length)]; p.tx = d.x + (Math.random() - 0.5) * 0.7; p.tz = d.z + (Math.random() - 0.5) * 0.7; p.state = "walk"; }
+      else if (r < 0.6 && D > 1) { const o = seats[Math.floor(Math.random() * D)]; p.tx = o.x + 0.7; p.tz = o.z + 0.7; p.state = "walk"; }
+      else p.t = 4 + Math.random() * 7;
+    }
+    function updPerson(p, dt) {
+      if (p.state === "walk" || p.state === "return") {
+        const dx = p.tx - p.x, dz = p.tz - p.z, d = Math.hypot(dx, dz);
+        if (d < 0.06) { p.x = p.tx; p.z = p.tz; if (p.state === "walk") { p.state = "dwell"; p.t = 3 + Math.random() * 4; } else { p.state = "work"; p.t = 4 + Math.random() * 7; } }
+        else { const s = Math.min(d, 1.25 * dt); p.x += dx / d * s; p.z += dz / d * s; p.dir = Math.atan2(dx, dz); p.bob += dt * 9; }
+        p.seated = false; return;
+      }
+      if (p.state === "dwell") { p.seated = false; p.t -= dt; if (p.t <= 0) { p.tx = p.hx; p.tz = p.hz; p.state = "return"; } return; }
+      p.seated = true; p.x = p.hx; p.z = p.hz; p.t -= dt; if (p.t <= 0) pickGoal(p);
+    }
 
     // ----- first-person camera + controls -----
     const keys = new Set();
@@ -8220,6 +8253,15 @@ function BuildingFP3D({ building, focusEmp, onClose, onSelect }) {
       if (keys.has("a")) { fpc.pos.x -= fz * sp; fpc.pos.z += fx * sp; }
       fpc.pos.x = THREE.MathUtils.clamp(fpc.pos.x, 0.4, WX - 0.4); fpc.pos.z = THREE.MathUtils.clamp(fpc.pos.z, 0.4, WZ - 0.4); fpc.pos.y = eye;
       applyCam();
+      // animate people (seated ⇄ walking) + blinking server racks
+      rackMat.emissiveIntensity = 0.5 + 0.4 * Math.abs(Math.sin(now * 0.004));
+      for (let i = 0; i < people.length; i++) updPerson(people[i], dt);
+      for (let i = 0; i < people.length; i++) {
+        const p = people[i], x = p.x * S, z = p.z * S;
+        if (p.seated) { dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 0.72, 1); dummy.position.set(x, 0.78, z); dummy.updateMatrix(); bodyInst.setMatrixAt(i, dummy.matrix); dummy.scale.set(1, 1, 1); dummy.position.set(x, 1.3, z); dummy.updateMatrix(); headInst.setMatrixAt(i, dummy.matrix); }
+        else { const bob = Math.sin(p.bob) * 0.05; dummy.rotation.set(0, p.dir, 0); dummy.scale.set(1, 1, 1); dummy.position.set(x, 0.92 + bob, z); dummy.updateMatrix(); bodyInst.setMatrixAt(i, dummy.matrix); dummy.position.set(x, 1.62 + bob, z); dummy.updateMatrix(); headInst.setMatrixAt(i, dummy.matrix); }
+      }
+      bodyInst.instanceMatrix.needsUpdate = true; headInst.instanceMatrix.needsUpdate = true;
       if (document.pointerLockElement === el && now - lastPick > 80) {
         lastPick = now; const id = pickCenter(), tip = tipRef.current;
         if (tip) { if (id >= 0 && seats[id]) { const e2 = seats[id].e; tip.textContent = `${e2.first} ${e2.last}${e2.title ? " · " + e2.title : ""}`; tip.style.display = "block"; } else tip.style.display = "none"; }
